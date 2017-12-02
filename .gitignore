@@ -22,3 +22,7 @@ xcuserdata/
 *.xcscmblueprint
 ide_profiles/xcode/Debug/
 ide_profiles/xcode/Path_Planning.build/
+
+# IntelliJ
+.idea
+cmake-build-debug
