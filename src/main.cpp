@@ -9,6 +9,7 @@
 #include "Eigen-3.3/Eigen/QR"
 #include "json.hpp"
 #include "spline.h"
+#include "fsm.h"
 
 using namespace std;
 
@@ -19,6 +20,11 @@ using json = nlohmann::json;
 constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
 double rad2deg(double x) { return x * 180 / pi(); }
+
+const double MAX_VEL = 49.5;
+const double MAX_ACC = .224;
+const int LEFT_LANE = 0;
+const int RIGHT_LANE = 2;
 
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
@@ -164,6 +170,17 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s, const vec
 
 }
 
+enum States { Normal, Follow, ChangeLeft, ChangeRight };
+enum Triggers {  CarAhead, Clear };
+FSM::Fsm<States, States::Normal, Triggers> fsm;
+const char * StateNames[] = { "Normal", "Follow Vehicle In Front", "Change To Left Lane", "Change To Right Lane" };
+
+void dbg_fsm(States from_state, States to_state, Triggers trigger) {
+    if (from_state != to_state) {
+        std::cout << "State Changed To: " << StateNames[to_state] << "\n";
+    }
+}
+
 int main() {
   uWS::Hub h;
 
@@ -205,9 +222,35 @@ int main() {
   int lane = 1;
   
   // reference velocity
-  double ref_vel = 49.5; //mph
-    
-  h.onMessage([&ref_vel,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy, &lane](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  double ref_vel = 0.0; //mph
+
+  bool car_ahead = false;
+  bool car_left = false;
+  bool car_right = false;
+
+  fsm.add_transitions({
+                            //  from state ,to state  ,triggers        ,guard                    ,action
+                            { States::Normal  ,States::ChangeLeft ,Triggers::CarAhead  ,[&]{return car_ahead && !car_left && lane > LEFT_LANE;}  ,[&]{lane--;} },
+                            { States::ChangeLeft ,States::Normal ,Triggers::Clear  ,[&]{return !car_ahead;}  ,[&]{} },
+                            { States::ChangeLeft ,States::Follow ,Triggers::CarAhead  ,[&]{return car_ahead;}  ,[&]{ ref_vel -= MAX_ACC; } },
+                            { States::Follow ,States::ChangeLeft ,Triggers::CarAhead  ,[&]{return car_ahead && !car_left && lane > LEFT_LANE;}  ,[&]{lane--;} },
+
+                            { States::Normal  ,States::ChangeRight ,Triggers::CarAhead  ,[&]{return car_ahead && !car_right && lane != RIGHT_LANE;}  ,[&]{lane++;} },
+                            { States::ChangeRight  ,States::Normal ,Triggers::Clear  ,[&]{return !car_ahead;}  ,[&]{} },
+                            { States::ChangeRight ,States::Follow ,Triggers::CarAhead  ,[&]{return car_ahead;}  ,[&]{ ref_vel -= MAX_ACC; } },
+                            { States::Follow ,States::ChangeRight ,Triggers::CarAhead  ,[&]{return car_ahead && !car_right && lane != RIGHT_LANE;}  ,[&]{lane++;} },
+
+                            { States::Normal  ,States::Follow ,Triggers::CarAhead  ,[&]{return true;}  ,[&]{ref_vel -= MAX_ACC;} },
+                            { States::Follow  ,States::Follow ,Triggers::CarAhead  ,[&]{return true;}  ,[&]{ref_vel -= MAX_ACC;} },
+                            { States::Follow  ,States::Normal ,Triggers::Clear  ,[&]{return !car_ahead;}  ,[&]{ref_vel += MAX_ACC;} },
+                            { States::Normal  ,States::Normal ,Triggers::Clear  ,[&]{return !car_ahead;}  ,[&]{ if (ref_vel < MAX_VEL) { ref_vel += MAX_ACC; }} },
+
+                    });
+
+  fsm.add_debug_fn(dbg_fsm);
+
+
+  h.onMessage([&car_ahead, &car_left, &car_right, &ref_vel,&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy, &lane](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -247,6 +290,55 @@ int main() {
             int prev_size = previous_path_x.size();
 
           	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
+
+            if (prev_size > 0) {
+                car_s = end_path_s;
+            }
+
+            // Prediction : Analysing other cars positions.
+            car_ahead = false;
+            car_left = false;
+            car_right = false;
+            for ( int i = 0; i < sensor_fusion.size(); i++ ) {
+                float d = sensor_fusion[i][6];
+                int car_lane = -1;
+                // is it on the same lane we are
+                if ( d > 0 && d < 4 ) {
+                    car_lane = 0;
+                } else if ( d > 4 && d < 8 ) {
+                    car_lane = 1;
+                } else if ( d > 8 && d < 12 ) {
+                    car_lane = 2;
+                }
+                if (car_lane < 0) {
+                    continue;
+                }
+                // Find car speed.
+                double vx = sensor_fusion[i][3];
+                double vy = sensor_fusion[i][4];
+                double check_speed = sqrt(vx*vx + vy*vy);
+                double check_car_s = sensor_fusion[i][5];
+                // Estimate car s position after executing previous trajectory.
+                check_car_s += ((double)prev_size*0.02*check_speed);
+
+                if ( car_lane == lane ) {
+                    // Car in our lane.
+                    car_ahead |= check_car_s > car_s && check_car_s - car_s < 30;
+                } else if ( car_lane - lane == -1 ) {
+                    // Car left
+                    car_left |= car_s - 30 < check_car_s && car_s + 30 > check_car_s;
+                } else if ( car_lane - lane == 1 ) {
+                    // Car right
+                    car_right |= car_s - 30 < check_car_s && car_s + 30 > check_car_s;
+                }
+            }
+            
+            // Behaviour: Trigger State Changes Depending If Road Clear of Vehicle Ahead
+            if (car_ahead) {
+                fsm.execute(Triggers::CarAhead);
+            } else {
+                fsm.execute(Triggers::Clear);
+            }
 
             // Create a list of widely spaced (x,y) waypoints, evenly spaced at 30m
             // later interpolate waypoints with spline and fill in more waypoints
@@ -339,6 +431,13 @@ int main() {
             // fill up the rest of the path planner after filling it with previous points
             // always 50 points will be output
             for (int i=0; i <= 50-previous_path_x.size(); i++) {
+
+                if ( ref_vel > MAX_VEL ) {
+                    ref_vel = MAX_VEL;
+                } else if ( ref_vel < MAX_ACC ) {
+                    ref_vel = MAX_ACC;
+                }
+
                 double N = (target_dist/(0.02*ref_vel/2.24));
                 double x_point = x_add_on+(target_x)/N;
                 double y_point = s(x_point);
