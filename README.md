@@ -1,4 +1,4 @@
-# CarND-Path-Planning-Project
+# Path Planning Project
 Self-Driving Car Engineer Nanodegree Program
    
 ![Intro](https://github.com/mkoehnke/CarND-Path-Planning-Project/raw/master/doc/screenshot.png)
@@ -27,7 +27,7 @@ You can download the Term3 Simulator which contains the Path Planning Project fr
 I used two additional libraries in this project:
 
 - [spline](http://kluge.in-chemnitz.de/opensource/spline/) *(Cubic Spline interpolation implementation)*
-- [cppfsm] (https://github.com/eglimi/cppfsm) *(Simple, generic, header-only state machine implementation for C++)*
+- [cppfsm](https://github.com/eglimi/cppfsm) *(Simple, generic, header-only state machine implementation for C++)*
 
 
 ### Valid Trajectories
