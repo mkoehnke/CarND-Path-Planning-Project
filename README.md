@@ -1,14 +1,10 @@
 # CarND-Path-Planning-Project
 Self-Driving Car Engineer Nanodegree Program
    
- [picture]
+![Intro](https://github.com/mkoehnke/CarND-Path-Planning-Project/raw/master/doc/screenshot.png)
    
 ### Intoduction
 In this project the goal is to safely navigate around a virtual highway with other traffic that is driving +-10 MPH of the 50 MPH speed limit. The car's localization and sensor fusion data is provided, there is also a sparse map list of waypoints around the highway. The car's velocity is as close as possible to the 50 MPH speed limit, which means passing slower traffic when possible. The car tries to avoid hitting other cars at all cost as well as driving inside of the marked road lanes at all times, unless going from one lane to another. The car is able to make one complete loop around the 6946m highway.
-   
-Notes:
-- https://github.com/eglimi/cppfsm
-- A simple, generic, header-only state machine implementation for C+
 
 ### Simulator.
 You can download the Term3 Simulator which contains the Path Planning Project from the [releases tab (https://github.com/udacity/self-driving-car-sim/releases).
@@ -30,8 +26,8 @@ You can download the Term3 Simulator which contains the Path Planning Project fr
 
 I used two additional libraries in this project:
 
-- spline.h (Cubic Spline interpolation implementation)
-- cppfsm (simple, generic, header-only state machine implementation for C++)
+- [spline](http://kluge.in-chemnitz.de/opensource/spline/) *(Cubic Spline interpolation implementation)*
+- [cppfsm] (https://github.com/eglimi/cppfsm) *(Simple, generic, header-only state machine implementation for C++)*
 
 
 ### Valid Trajectories
@@ -40,7 +36,8 @@ I used two additional libraries in this project:
 
 The car was able to drive 10 miles without incidents:
 
-[picture]
+![10miles](https://github.com/mkoehnke/CarND-Path-Planning-Project/raw/master/doc/screenshot_10miles.png)
+
 
 #### The car drives according to the speed limit.
 
@@ -85,7 +82,7 @@ This part uses a Finite State Machine to determine the behavior. You can find th
 
 It decides if the car changes its state to accelerate, decelerate or change lanes. 4 states are defined:
 
-[picture]
+![FSM](https://github.com/mkoehnke/CarND-Path-Planning-Project/raw/master/doc/fsm.png)
 
 - **N** = Normal *(Initial State / Accelerate if necessary)*
 - **L** = Change To Left Lane
