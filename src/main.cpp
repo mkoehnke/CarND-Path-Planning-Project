@@ -19,6 +19,7 @@ double rad2deg(double x) { return x * 180 / pi(); }
 
 const double MAX_VEL = 49.5;
 const double MAX_ACC = .224;
+const double MAX_DEC = .448;
 const int LEFT_LANE = 0;
 const int MIDDLE_LANE = 1;
 const int RIGHT_LANE = 2;
@@ -232,20 +233,22 @@ int main() {
   bool car_left = false;
   bool car_right = false;
 
+
+  // State Machine Setup
   fsm.add_transitions({
                             //  from state ,to state  ,triggers        ,guard                    ,action
                             { States::Normal  ,States::ChangeLeft ,Triggers::CarAhead  ,[&]{return car_ahead && !car_left && lane > LEFT_LANE;}  ,[&]{lane--;} },
                             { States::ChangeLeft ,States::Normal ,Triggers::Clear  ,[&]{return !car_ahead;}  ,[&]{} },
-                            { States::ChangeLeft ,States::Follow ,Triggers::CarAhead  ,[&]{return car_ahead;}  ,[&]{ ref_vel -= MAX_ACC; } },
+                            { States::ChangeLeft ,States::Follow ,Triggers::CarAhead  ,[&]{return car_ahead;}  ,[&]{ ref_vel -= MAX_DEC; } },
                             { States::Follow ,States::ChangeLeft ,Triggers::CarAhead  ,[&]{return car_ahead && !car_left && lane > LEFT_LANE;}  ,[&]{lane--;} },
 
                             { States::Normal  ,States::ChangeRight ,Triggers::CarAhead  ,[&]{return car_ahead && !car_right && lane != RIGHT_LANE;}  ,[&]{lane++;} },
                             { States::ChangeRight  ,States::Normal ,Triggers::Clear  ,[&]{return !car_ahead;}  ,[&]{} },
-                            { States::ChangeRight ,States::Follow ,Triggers::CarAhead  ,[&]{return car_ahead;}  ,[&]{ ref_vel -= MAX_ACC; } },
+                            { States::ChangeRight ,States::Follow ,Triggers::CarAhead  ,[&]{return car_ahead;}  ,[&]{ ref_vel -= MAX_DEC; } },
                             { States::Follow ,States::ChangeRight ,Triggers::CarAhead  ,[&]{return car_ahead && !car_right && lane != RIGHT_LANE;}  ,[&]{lane++;} },
 
-                            { States::Normal  ,States::Follow ,Triggers::CarAhead  ,[&]{return true;}  ,[&]{ref_vel -= MAX_ACC;} },
-                            { States::Follow  ,States::Follow ,Triggers::CarAhead  ,[&]{return true;}  ,[&]{ref_vel -= MAX_ACC;} },
+                            { States::Normal  ,States::Follow ,Triggers::CarAhead  ,[&]{return true;}  ,[&]{ref_vel -= MAX_DEC;} },
+                            { States::Follow  ,States::Follow ,Triggers::CarAhead  ,[&]{return true;}  ,[&]{ref_vel -= MAX_DEC;} },
                             { States::Follow  ,States::Normal ,Triggers::Clear  ,[&]{return !car_ahead;}  ,[&]{ref_vel += MAX_ACC;} },
                             { States::Normal  ,States::Normal ,Triggers::Clear  ,[&]{return !car_ahead;}  ,[&]{ if (ref_vel < MAX_VEL) { ref_vel += MAX_ACC; }} },
 
@@ -296,7 +299,7 @@ int main() {
                 car_s = end_path_s;
             }
 
-            // Prediction : Analysing other cars positions.
+            // 1. PREDICTION : Analysing other cars positions.
             car_ahead = false;
             car_left = false;
             car_right = false;
@@ -338,7 +341,7 @@ int main() {
                 }
             }
 
-            // Behaviour: Trigger State Changes Depending If Road Clear of Vehicle Ahead
+            // 2. BEHAVIOR: Trigger State Changes Depending If Road Clear of Vehicle Ahead
             if (car_ahead) {
                 // Execute 'CarAhead' trigger on state machine
                 fsm.execute(Triggers::CarAhead);
@@ -346,6 +349,9 @@ int main() {
                 // Execute 'Clear' trigger on state machine
                 fsm.execute(Triggers::Clear);
             }
+
+
+            // 3. TRAJECTORY: Calculate trajectory for the car to follow
 
             // Create a list of widely spaced (x,y) waypoints, evenly spaced at 30m
             // later interpolate waypoints with spline and fill in more waypoints

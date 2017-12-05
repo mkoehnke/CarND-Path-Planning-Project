@@ -1,0 +1,28 @@
+digraph finite_state_machine {
+    rankdir=LR;
+    size="8,5"
+
+    node [shape = doublecircle]; N;
+    node [shape = circle ]; L;
+    node [shape = circle ]; R;
+    node [shape = circle ]; F;
+
+    node [shape = point ]; qi
+    qi -> N;
+
+    N -> N; //[ label = "Clear" ];
+    N -> L; //[ label = "Car" ];
+    N -> R; //[ label = "Car" ];
+    N -> F; //[ label = "Car" ];
+
+    L -> N; // [ label = "Clear" ];
+    L -> F; //  [ label = "Car" ];
+
+    R -> N; //[ label = "Clear" ];
+    R -> F; //[ label = "Car" ];
+
+    F -> F; //[ label = "Car" ];
+    F -> L;  //[ label = "Car" ];
+    F -> R; //[ label = "Car" ];
+    F -> N; //[ label = "Clear" ];
+}
